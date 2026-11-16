@@ -354,3 +354,8 @@ header.site .navwrap{display:flex;align-items:center;gap:26px}
  .wallet{gap:7px;padding:7px 10px;font-size:11px}
  .acct-btn{padding:7px 11px}
 }
+.pwbox{position:relative;display:block}
+.pwbox input{padding-right:48px!important}
+.pweye{position:absolute;right:6px;top:50%;transform:translateY(-50%);width:38px;height:38px;display:grid;place-items:center;color:#a69c92;border-radius:8px}
+.pweye:hover{color:#fff}
+.pweye svg{width:20px;height:20px}

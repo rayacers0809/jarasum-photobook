@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { sb } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
 import { useToast } from "@/components/Toast";
+import PasswordInput from "@/components/PasswordInput";
 
 const BASE = process.env.NEXT_PUBLIC_BASE_PATH || "";
 
@@ -62,7 +63,7 @@ export default function LoginPage() {
           <div className="fgrid" style={{ gridTemplateColumns: "1fr" }}>
             {tab === "up" && <label className="f">닉네임 (2~16자)<input value={nick} onChange={(e) => setNick(e.target.value)} maxLength={16} required /></label>}
             <label className="f">이메일<input type="email" autoComplete="username" value={email} onChange={(e) => setEmail(e.target.value)} required /></label>
-            <label className="f">비밀번호{tab === "up" && " (6자 이상)"}<input type="password" autoComplete={tab === "in" ? "current-password" : "new-password"} value={pw} onChange={(e) => setPw(e.target.value)} required /></label>
+            <label className="f">비밀번호{tab === "up" && " (6자 이상)"}<PasswordInput autoComplete={tab === "in" ? "current-password" : "new-password"} value={pw} onChange={(e) => setPw(e.target.value)} required /></label>
             <button className="abtn pri" type="submit" disabled={busy}>{busy ? "잠깐만…" : tab === "in" ? "로그인" : "가입하고 선물 받기"}</button>
             {msg && <div style={{ fontSize: 13, color: "#f0d28a", lineHeight: 1.7 }}>{msg}</div>}
           </div>
