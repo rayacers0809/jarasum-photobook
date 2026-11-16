@@ -20,9 +20,12 @@ webtoon 프로젝트(`nwgxznnfilbsnipwumsu`) 안에 포토북 전용 리소스�
 
 RLS: 공개 포토북은 누구나 읽기, 쓰기·업로드는 `public.is_staff()` 관리자만 (웹툰 관리자 계정 공유).
 
-## 배포
-`main`에 push하면 GitHub Actions가 빌드해서 GitHub Pages로 배포 (`.github/workflows/deploy.yml`).
-Cloudflare Pages로 옮길 때: Build command `npm run build`, Output `out`, `NEXT_PUBLIC_BASE_PATH`는 비워둠.
+## 배포 (Cloudflare Pages)
+GitHub 연동으로 `main`에 push하면 자동 배포.
+- Framework preset: Next.js (Static HTML Export)
+- Build command: `npm run build`
+- Build output directory: `out`
+- 환경변수: `NODE_VERSION=22` (`NEXT_PUBLIC_BASE_PATH`는 비워둠)
 
 ## 로컬
 ```bash
