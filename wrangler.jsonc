@@ -1,0 +1,10 @@
+{
+  // Cloudflare Workers (static assets) — serves the Next.js static export in ./out
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "jarasum-photobook",
+  "compatibility_date": "2026-11-01",
+  "assets": {
+    "directory": "./out",
+    "not_found_handling": "404-page"
+  }
+}
