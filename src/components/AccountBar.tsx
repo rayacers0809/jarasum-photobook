@@ -29,6 +29,10 @@ export default function AccountBar({ toast }: { toast: (m: string) => void }) {
       <button className={`acct-btn${me.checked_today ? "" : " solid pulse"}`} onClick={onCheck}>
         {me.checked_today ? `✓ ${me.streak}일` : "출석"}
       </button>
+      <a className="acct-btn my" href={`${BASE}/me/`} aria-label="마이페이지" title="마이페이지">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="8" r="4" /><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6" /></svg>
+        <span>MY</span>
+      </a>
     </div>
   );
 }

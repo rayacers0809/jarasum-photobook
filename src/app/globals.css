@@ -359,3 +359,6 @@ header.site .navwrap{display:flex;align-items:center;gap:26px}
 .pweye{position:absolute;right:6px;top:50%;transform:translateY(-50%);width:38px;height:38px;display:grid;place-items:center;color:#a69c92;border-radius:8px}
 .pweye:hover{color:#fff}
 .pweye svg{width:20px;height:20px}
+.acct-btn.my{display:inline-flex;align-items:center;gap:5px}
+.acct-btn.my svg{width:14px;height:14px}
+@media(max-width:420px){.acct-btn.my span{display:none}.acct-btn.my{padding:7px 9px}}
