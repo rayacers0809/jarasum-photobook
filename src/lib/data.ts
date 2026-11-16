@@ -24,10 +24,25 @@ export type Book = {
   is_public: boolean;
   cover_path: string | null;
   updated_at: string;
+  member_id: string | null;
+  ticket_cost: number;
+  free_photos: number;
+  is_official: boolean;
+  /** total photo pages incl. locked ones (pages[] only holds what the viewer may see) */
+  total_pages: number;
   pages: Page[];
 };
 
-export type BookField = "name" | "en" | "title" | "slogan" | "description" | "profile" | "credits" | "color" | "is_public";
+export type Member = { id: string; name: string; en: string; sort: number };
+
+export type Me = {
+  user_id: string; nickname: string; cookies: number; tickets: number; streak: number;
+  checked_today: boolean; is_staff: boolean; editor_members: string[];
+  application: { status: "pending" | "approved" | "rejected"; member_id: string; created_at: string } | null;
+  album_unlocks: string[]; episode_unlocks: string[];
+};
+
+export type BookField = "name" | "en" | "title" | "slogan" | "description" | "profile" | "credits" | "color" | "is_public" | "ticket_cost" | "free_photos";
 
 export const pad = (n: number) => String(n).padStart(2, "0");
 export const safeColor = (c?: string | null) => (/^#[0-9a-f]{6}$/i.test(c || "") ? (c as string) : "#d8b875");
@@ -38,12 +53,48 @@ export function imgUrl(path?: string | null): string {
 }
 
 export async function fetchBooks(): Promise<Book[]> {
-  const { data, error } = await sb
-    .from("photobook_books")
-    .select("*, pages:photobook_pages(*)")
-    .order("sort", { ascending: true });
+  const [{ data, error }, counts] = await Promise.all([
+    sb.from("photobook_books").select("*, pages:photobook_pages(*)")
+      .order("sort", { ascending: true }).order("created_at", { ascending: false }),
+    sb.rpc("photobook_page_counts"),
+  ]);
   if (error) throw error;
-  return (data as Book[]).map((b) => ({ ...b, pages: [...(b.pages || [])].sort((a, c) => a.position - c.position) }));
+  const total = new Map<string, number>(((counts.data || []) as { book_id: string; total: number }[]).map((r) => [r.book_id, r.total]));
+  return (data as Book[]).map((b) => {
+    const pages = [...(b.pages || [])].sort((a, c) => a.position - c.position || a.id.localeCompare(c.id));
+    return { ...b, pages, total_pages: Math.max(total.get(b.id) ?? pages.length, pages.length) };
+  });
+}
+
+export async function fetchMembers(): Promise<Member[]> {
+  const { data, error } = await sb.from("photobook_members").select("*").order("sort");
+  if (error) throw error;
+  return data as Member[];
+}
+
+export const isLocked = (b: Book) => b.pages.length < b.total_pages;
+
+/** Map RPC error codes to friendly Korean messages. */
+export function rpcError(e: unknown): string {
+  const m = String((e as { message?: string })?.message || e);
+  if (m.includes("NOT_ENOUGH_TICKETS")) return "티켓이 부족해. 출석하면 티켓을 받을 수 있어!";
+  if (m.includes("NOT_ENOUGH_COOKIES")) return "쿠키가 부족해. 출석하면 쿠키를 받을 수 있어!";
+  if (m.includes("LOGIN_REQUIRED")) return "로그인이 필요해";
+  if (m.includes("ALREADY_PENDING")) return "이미 심사 중인 신청이 있어";
+  if (m.includes("ALREADY_EDITOR")) return "이미 이 멤버의 앨범 권한이 있어";
+  if (m.includes("FORBIDDEN")) return "권한이 없어";
+  return m;
+}
+
+export async function unlockAlbum(bookId: string) {
+  const { data, error } = await sb.rpc("jr_unlock_album", { p_book: bookId });
+  if (error) throw new Error(rpcError(error));
+  return data as { ok: boolean; tickets?: number };
+}
+
+/** Filename for downloads: jarasum-<book>-<nn>.jpg */
+export function downloadUrl(path: string, name: string) {
+  return `${imgUrl(path)}?download=${encodeURIComponent(name)}`;
 }
 
 /** Resize on the client before upload (max 2000px, JPEG) — keeps storage small and pages fast. */
@@ -89,6 +140,25 @@ export async function updatePage(id: string, patch: Partial<Pick<Page, "section"
   if (error) throw error;
 }
 
+export async function createAlbum(m: Member, uid: string) {
+  const id = `${m.id}-${Math.random().toString(36).slice(2, 8)}`;
+  const { error } = await sb.from("photobook_books").insert({
+    id, kind: "member", member_id: m.id, name: m.name, en: m.en, sort: 100,
+    title: "NEW ALBUM", slogan: "Every frame, a signature.", is_public: false, is_official: false, created_by: uid,
+    profile: `NAME: ${m.name}\nENGLISH: ${m.en}\nGROUP: JARASUM`,
+    credits: "PHOTOGRAPHY — JARASUM OFFICIAL", color: "#d8b875",
+  });
+  if (error) throw error;
+  return id;
+}
+
+export async function deleteBook(b: Book) {
+  const paths = [b.cover_path, ...b.pages.map((p) => p.image_path)].filter(Boolean) as string[];
+  const { error } = await sb.from("photobook_books").delete().eq("id", b.id);
+  if (error) throw error;
+  if (paths.length) await sb.storage.from(BUCKET).remove(paths);
+}
+
 export async function insertPage(bookId: string, position: number, section: string, image_path: string | null) {
   const { error } = await sb.from("photobook_pages").insert({ book_id: bookId, position, section, image_path });
   if (error) throw error;
@@ -100,12 +170,13 @@ export async function deletePage(id: string) {
 }
 
 /* ---------- photobook page model ---------- */
-export type PageKind = "cover" | "title" | "profile" | "roster" | "photo" | "credits" | "end";
-export type PageDesc = { k: PageKind; p?: Page; n?: number };
+export type PageKind = "cover" | "title" | "profile" | "roster" | "photo" | "lock" | "credits" | "end";
+export type PageDesc = { k: PageKind; p?: Page; n?: number; remaining?: number };
 
 export function bookPages(b: Book): PageDesc[] {
   const P: PageDesc[] = [{ k: "cover" }, { k: "title" }, { k: b.kind === "group" ? "roster" : "profile" }];
   b.pages.forEach((p, i) => P.push({ k: "photo", p, n: i + 1 }));
+  if (isLocked(b)) P.push({ k: "lock", remaining: b.total_pages - b.pages.length });
   P.push({ k: "credits" }, { k: "end" });
   return P;
 }

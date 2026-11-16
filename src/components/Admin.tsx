@@ -1,10 +1,10 @@
 "use client";
 import { CSSProperties, useCallback, useEffect, useRef, useState } from "react";
-import type { Session } from "@supabase/supabase-js";
 import { sb } from "@/lib/supabase";
+import { useAuth } from "@/lib/auth";
 import {
-  Book, BookField, Page, SECTION_PRESETS, deletePage, fetchBooks, imgUrl, insertPage, pad,
-  removeImage, safeColor, touchBook, updateBook, updatePage, uploadImage,
+  Book, BookField, Member, Page, SECTION_PRESETS, createAlbum, deleteBook, deletePage, fetchBooks, fetchMembers, imgUrl, insertPage, pad,
+  removeImage, rpcError, safeColor, touchBook, updateBook, updatePage, uploadImage,
 } from "@/lib/data";
 import Viewer from "./Viewer";
 import { useToast } from "./Toast";
@@ -20,34 +20,40 @@ function pickFiles(multiple: boolean): Promise<File[]> {
   });
 }
 
+type App = { id: string; user_id: string; member_id: string; member_name: string; streamer_name: string; soop_id: string; message: string; status: string; created_at: string; nickname: string | null; email: string | null };
+type Editor = { user_id: string; member_id: string; member_name: string; nickname: string | null; email: string | null };
+
 export default function Admin() {
-  const [session, setSession] = useState<Session | null>(null);
-  const [ready, setReady] = useState(false);
-  const [staff, setStaff] = useState<boolean | null>(null);
+  const { ready, me } = useAuth();
+  const staff = !!me?.is_staff;
   const [books, setBooks] = useState<Book[]>([]);
-  const [sel, setSel] = useState("rumung");
+  const [members, setMembers] = useState<Member[]>([]);
+  const [apps, setApps] = useState<App[]>([]);
+  const [editors, setEditors] = useState<Editor[]>([]);
+  const [tab, setTab] = useState<"albums" | "apps">("albums");
+  const [sel, setSel] = useState("");
   const [busy, setBusy] = useState("");
   const [preview, setPreview] = useState(false);
   const [confirm, setConfirm] = useState<{ msg: string; ok: () => void } | null>(null);
   const { toast, node } = useToast();
   const timers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
 
-  useEffect(() => {
-    sb.auth.getSession().then(({ data }) => { setSession(data.session); setReady(true); });
-    const { data } = sb.auth.onAuthStateChange((_e, s) => setSession(s));
-    return () => data.subscription.unsubscribe();
+  const canEdit = !!me && (me.is_staff || me.editor_members.length > 0);
+  const reload = useCallback(async () => {
+    const [bs, ms] = await Promise.all([fetchBooks(), fetchMembers()]);
+    setBooks(bs); setMembers(ms);
+  }, []);
+  const reloadApps = useCallback(async () => {
+    const [a, e] = await Promise.all([sb.rpc("jr_list_applications"), sb.rpc("jr_list_editors")]);
+    setApps((a.data as App[]) || []); setEditors((e.data as Editor[]) || []);
   }, []);
 
-  const reload = useCallback(async () => { setBooks(await fetchBooks()); }, []);
-
+  useEffect(() => { if (ready && !me) location.href = `${BASE}/login/?next=/admin/`; }, [ready, me]);
   useEffect(() => {
-    if (!session) { setStaff(null); return; }
-    sb.rpc("is_staff").then(({ data, error }) => {
-      const ok = !error && data === true;
-      setStaff(ok);
-      if (ok) reload().catch((e) => toast("불러오기 실패: " + e.message));
-    });
-  }, [session, reload, toast]);
+    if (!canEdit) return;
+    reload().catch((e) => toast("불러오기 실패: " + e.message));
+    if (staff) reloadApps();
+  }, [canEdit, staff, reload, reloadApps, toast]);
 
   const run = async (label: string, fn: () => Promise<void>, done?: string) => {
     setBusy(label);
@@ -56,10 +62,13 @@ export default function Admin() {
     finally { setBusy(""); }
   };
 
-  const b = books.find((x) => x.id === sel);
+  const mine = books.filter((x) => staff || (x.member_id && me?.editor_members.includes(x.member_id)));
+  const b = mine.find((x) => x.id === sel) || mine[0];
+  const myMembers = members.filter((m) => staff || me?.editor_members.includes(m.id));
+  const pendingCount = apps.filter((a) => a.status === "pending").length;
 
   // optimistic text edits, debounced save
-  const editBook = (f: BookField, v: string | boolean) => {
+  const editBook = (f: BookField, v: string | boolean | number) => {
     if (!b) return;
     setBooks((bs) => bs.map((x) => (x.id === b.id ? { ...x, [f]: v } : x)));
     const key = `b:${b.id}:${f}`;
@@ -77,18 +86,16 @@ export default function Admin() {
     }, 600);
   };
 
-  if (!ready) return <div className="wrap admin"><p>LOADING…</p></div>;
+  if (!ready || !me) return <div className="wrap admin"><p>LOADING…</p></div>;
 
-  if (!session || staff === false) {
+  if (!canEdit) {
     return (
       <div className="wrap admin">
-        <div className="ahead"><h2>ADMIN STUDIO</h2><a className="abtn" href={`${BASE}/`}>← 홈페이지</a></div>
-        {staff === false && (
-          <div className="anote">이 계정은 관리자 권한이 없어. 웹툰 관리자 계정으로 로그인해줘.
-            <div style={{ marginTop: 10 }}><button className="abtn" onClick={() => sb.auth.signOut()}>로그아웃</button></div>
-          </div>
-        )}
-        {!session && <Login onError={toast} />}
+        <div className="ahead"><h2>ALBUM STUDIO</h2><a className="abtn" href={`${BASE}/`}>← 홈페이지</a></div>
+        <div className="anote">앨범 스튜디오는 승인된 자라섬 멤버만 쓸 수 있어.
+          {me.application?.status === "pending" ? " 지금 신청을 심사하고 있어!" : " 멤버 본인이라면 마이페이지에서 권한을 신청해줘."}
+          <div style={{ marginTop: 10 }}><a className="abtn pri" href={`${BASE}/me/`}>마이페이지 →</a></div>
+        </div>
         {node}
       </div>
     );
@@ -97,19 +104,70 @@ export default function Admin() {
   return (
     <div className="wrap admin">
       <div className="ahead">
-        <h2>ADMIN STUDIO</h2>
+        <h2>{staff ? "ADMIN STUDIO" : "ALBUM STUDIO"}</h2>
         <div className="row">
           <a className="abtn" href={`${BASE}/`}>← 홈페이지</a>
-          <button className="abtn" onClick={() => sb.auth.signOut()}>로그아웃</button>
+          <a className="abtn" href={`${BASE}/me/`}>마이</a>
         </div>
       </div>
-      <div className="anote">사진을 올리거나 문구를 고치면 <b>바로 저장</b>되고 홈페이지에 즉시 반영돼. 사진은 자동으로 최적화(최대 2000px)돼서 올라가.{busy && <><br /><b style={{ color: "#cdb07a" }}>{busy}…</b></>}</div>
+      <div className="anote">{staff ? "관리자 모드: 모든 앨범 + 스트리머 권한 신청을 관리해." : `${myMembers.map((m) => m.name).join(", ")} 앨범만 만들고 고칠 수 있어.`} 사진·문구는 <b>바로 저장</b>되고 사이트에 즉시 반영돼.{busy && <><br /><b style={{ color: "#cdb07a" }}>{busy}…</b></>}</div>
+      {staff && (
+        <div className="tabs2" style={{ maxWidth: 420 }}>
+          <button className={tab === "albums" ? "on" : ""} onClick={() => setTab("albums")}>앨범</button>
+          <button className={tab === "apps" ? "on" : ""} onClick={() => { setTab("apps"); reloadApps(); }}>권한 신청{pendingCount ? ` (${pendingCount})` : ""}</button>
+        </div>
+      )}
+
+      {tab === "apps" && staff && (
+        <>
+          <div className="acard">
+            <h3>스트리머 권한 신청</h3>
+            {apps.length === 0 && <p style={{ fontSize: 13, color: "#857a70", margin: 0 }}>아직 신청이 없어.</p>}
+            {apps.map((a) => (
+              <div key={a.id} className="approw">
+                <div className="row" style={{ justifyContent: "space-between" }}>
+                  <b>{a.member_name} ← {a.streamer_name}</b><span className={`pill ${a.status}`}>{a.status === "pending" ? "대기" : a.status === "approved" ? "승인" : "반려"}</span>
+                </div>
+                <div className="meta">닉네임 {a.nickname || "-"} · {a.email} · SOOP {a.soop_id || "-"} · {new Date(a.created_at).toLocaleString("ko-KR")}</div>
+                {a.message && <div style={{ color: "#cfc6bd" }}>“{a.message}”</div>}
+                {a.status === "pending" && (
+                  <div className="row">
+                    <button className="abtn pri sm" disabled={!!busy} onClick={() => run("승인 중", async () => { const { error } = await sb.rpc("jr_review_application", { p_id: a.id, p_approve: true }); if (error) throw new Error(rpcError(error)); await reloadApps(); }, "승인 완료! 이제 본인 앨범을 만들 수 있어")}>승인</button>
+                    <button className="abtn warn sm" disabled={!!busy} onClick={() => setConfirm({ msg: `${a.streamer_name} 신청을 반려할까?`, ok: () => run("반려 중", async () => { const { error } = await sb.rpc("jr_review_application", { p_id: a.id, p_approve: false }); if (error) throw new Error(rpcError(error)); await reloadApps(); }, "반려됨") })}>반려</button>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+          <div className="acard">
+            <h3>권한 있는 스트리머</h3>
+            {editors.length === 0 && <p style={{ fontSize: 13, color: "#857a70", margin: 0 }}>아직 없어.</p>}
+            {editors.map((e) => (
+              <div key={e.user_id + e.member_id} className="approw" style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+                <span><b>{e.member_name}</b> · {e.nickname || e.email}</span>
+                <button className="abtn warn sm" onClick={() => setConfirm({ msg: `${e.nickname || e.email}의 ${e.member_name} 앨범 권한을 회수할까?`, ok: () => run("회수 중", async () => { const { error } = await sb.rpc("jr_revoke_editor", { p_user: e.user_id, p_member: e.member_id }); if (error) throw new Error(rpcError(error)); await reloadApps(); }, "권한 회수됨") })}>권한 회수</button>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+
+      {tab === "albums" && (
+      <>
       <div className="chips">
-        {books.map((x) => (
-          <button key={x.id} className={`chip${x.id === sel ? " on" : ""}${x.is_public ? "" : " priv"}`} style={{ "--ac": safeColor(x.color) } as CSSProperties} onClick={() => setSel(x.id)}>
-            <i />{x.kind === "group" ? "단체 · " + x.en : x.name}
+        {mine.map((x) => (
+          <button key={x.id} className={`chip${x.id === b?.id ? " on" : ""}${x.is_public ? "" : " priv"}`} style={{ "--ac": safeColor(x.color) } as CSSProperties} onClick={() => setSel(x.id)}>
+            <i />{x.kind === "group" ? "단체 · " + x.en : x.is_official ? x.name : `${x.name} · ${x.title}`}
           </button>
         ))}
+      </div>
+      <div className="acard">
+        <h3>새 앨범 만들기</h3>
+        <div className="row">
+          {myMembers.map((m) => (
+            <button key={m.id} className="abtn" disabled={!!busy} onClick={() => run("앨범 만드는 중", async () => { const id = await createAlbum(m, me.user_id); setSel(id); }, `${m.name} 새 앨범을 만들었어 (비공개 상태)`)}>+ {m.name}</button>
+          ))}
+        </div>
       </div>
 
       {b && (
@@ -119,7 +177,18 @@ export default function Admin() {
               <span>{b.kind === "group" ? b.en : b.name} 포토북</span>
               <label className="sw"><input type="checkbox" checked={b.is_public} onChange={(e) => editBook("is_public", e.target.checked)} />{b.is_public ? "공개" : "비공개"}</label>
             </h3>
-            <div className="row"><button className="abtn pri" onClick={() => setPreview(true)}>뷰어로 미리보기</button></div>
+            <div className="row">
+              <button className="abtn pri" onClick={() => setPreview(true)}>뷰어로 미리보기</button>
+              {!b.is_official && <button className="abtn warn" disabled={!!busy} onClick={() => setConfirm({ msg: `이 앨범(${b.title})을 사진까지 통째로 삭제할까? 되돌릴 수 없어.`, ok: () => run("삭제 중", async () => { await deleteBook(b); setSel(""); }, "앨범 삭제됨") })}>앨범 삭제</button>}
+            </div>
+          </div>
+
+          <div className="acard">
+            <h3>잠금 · 티켓</h3>
+            <div className="fgrid">
+              <label className="f">열람 티켓 (0 = 무료)<input type="number" min={0} max={20} value={b.ticket_cost} onChange={(e) => editBook("ticket_cost", Math.max(0, Math.min(20, +e.target.value || 0)))} /></label>
+              <label className="f">무료 미리보기 사진 수<input type="number" min={0} max={20} value={b.free_photos} onChange={(e) => editBook("free_photos", Math.max(0, Math.min(20, +e.target.value || 0)))} /></label>
+            </div>
           </div>
 
           <div className="acard">
@@ -191,6 +260,9 @@ export default function Admin() {
         </>
       )}
 
+      </>
+      )}
+
       {preview && b && <Viewer key={b.id} book={b} books={books} onClose={() => setPreview(false)} onOpenBook={(id) => setSel(id)} toast={toast} />}
       {confirm && (
         <div className="modal" onClick={(e) => { if (e.target === e.currentTarget) setConfirm(null); }}>
@@ -205,31 +277,5 @@ export default function Admin() {
       )}
       {node}
     </div>
-  );
-}
-
-function Login({ onError }: { onError: (m: string) => void }) {
-  const [email, setEmail] = useState("");
-  const [pw, setPw] = useState("");
-  const [loading, setLoading] = useState(false);
-  return (
-    <form
-      className="acard"
-      style={{ maxWidth: 420 }}
-      onSubmit={async (e) => {
-        e.preventDefault(); setLoading(true);
-        const { error } = await sb.auth.signInWithPassword({ email, password: pw });
-        setLoading(false);
-        if (error) onError("로그인 실패: " + error.message);
-      }}
-    >
-      <h3>관리자 로그인</h3>
-      <div className="fgrid" style={{ gridTemplateColumns: "1fr" }}>
-        <label className="f">이메일<input type="email" autoComplete="username" value={email} onChange={(e) => setEmail(e.target.value)} required /></label>
-        <label className="f">비밀번호<input type="password" autoComplete="current-password" value={pw} onChange={(e) => setPw(e.target.value)} required /></label>
-        <button className="abtn pri" type="submit" disabled={loading}>{loading ? "로그인 중…" : "로그인"}</button>
-        <span style={{ fontSize: 11, color: "#857a70" }}>자라섬 웹툰 관리자 계정과 같은 계정이야.</span>
-      </div>
-    </form>
   );
 }

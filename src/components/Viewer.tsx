@@ -1,18 +1,33 @@
 "use client";
 import { CSSProperties, ReactNode, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { Book, bookPages, imgUrl, pad, safeColor, spreads } from "@/lib/data";
+import { Book, bookPages, downloadUrl, imgUrl, isLocked, pad, safeColor, spreads, unlockAlbum } from "@/lib/data";
+import { useAuth } from "@/lib/auth";
 import PageView from "./PageView";
 
 type Anim = { to: number; dir: 1 | -1 };
 
 export default function Viewer({
-  book, books, startPage = 0, onClose, onOpenBook, toast,
+  book, books, startPage = 0, onClose, onOpenBook, toast, onUnlocked,
 }: {
   book: Book; books: Book[]; startPage?: number; onClose: () => void;
-  onOpenBook: (id: string) => void; toast: (t: string) => void;
+  onOpenBook: (id: string) => void; toast: (t: string) => void; onUnlocked?: () => Promise<unknown> | void;
 }) {
+  const { me, refresh } = useAuth();
+  const [unlocking, setUnlocking] = useState(false);
+  const BASE = process.env.NEXT_PUBLIC_BASE_PATH || "";
+  const doUnlock = async () => {
+    if (!me) { location.href = `${BASE}/login/?next=${encodeURIComponent(`/?book=${book.id}`)}`; return; }
+    setUnlocking(true);
+    try {
+      await unlockAlbum(book.id);
+      await refresh();
+      await onUnlocked?.();
+      toast("앨범을 열었어! 영구 소장 완료 ✨");
+    } catch (e) { toast((e as Error).message); }
+    finally { setUnlocking(false); }
+  };
   const P = useMemo(() => bookPages(book), [book]);
-  const members = useMemo(() => books.filter((x) => x.kind === "member"), [books]);
+  const members = useMemo(() => books.filter((x) => x.kind === "member" && x.is_official), [books]);
   const nextBook = useMemo(() => {
     const pub = books.filter((x) => x.is_public);
     const i = pub.findIndex((x) => x.id === book.id);
@@ -37,8 +52,6 @@ export default function Viewer({
   const swiped = useRef(false);
   const touch = useRef<{ x: number; y: number } | null>(null);
 
-  // reset when book changes
-  useEffect(() => { pageRef.current = Math.min(startPage, P.length - 1); setAnim(null); }, [book.id, startPage, P.length]);
   // re-map current page whenever the spread layout changes
   useEffect(() => { setSi(Math.max(0, S.findIndex((s) => s.includes(pageRef.current)))); }, [S]);
   useEffect(() => { const s = S[si]; if (s) pageRef.current = s.find((x) => x != null) ?? 0; }, [si, S]);
@@ -140,11 +153,23 @@ export default function Viewer({
     }
     return "";
   };
+  const canSave = !isLocked(book);
+  const saveTarget = (() => {
+    if (!canSave) return null;
+    for (const i of [...view].reverse()) {
+      if (i == null) continue;
+      const pg = P[i];
+      if (pg.k === "photo" && pg.p?.image_path) return downloadUrl(pg.p.image_path, `jarasum-${book.en}-${pad(pg.n || 0)}.jpg`.replace(/\s+/g, "_"));
+      if (pg.k === "cover" && book.cover_path) return downloadUrl(book.cover_path, `jarasum-${book.en}-cover.jpg`.replace(/\s+/g, "_"));
+    }
+    return null;
+  })();
   const openZoom = () => { const u = currentImg(); if (!u) { toast("이 페이지엔 확대할 사진이 없어"); return; } setZ2(false); setZoom(u); };
 
   const page = (i: number | null) =>
     i == null ? <div className="pg blank" /> : (
-      <PageView b={book} P={P} i={i} members={members} nextBook={nextBook} onClose={close} onNext={(id) => onOpenBook(id)} />
+      <PageView b={book} P={P} i={i} members={members} nextBook={nextBook} onClose={close} onNext={(id) => onOpenBook(id)}
+        lock={{ loggedIn: !!me, tickets: me?.tickets ?? 0, busy: unlocking, onUnlock: doUnlock }} />
     );
   const slot = (i: number | null, side: "L" | "R") => (
     <div key={`s-${side}-${i}`} className={`slot ${side}${i == null ? "" : " has"}`}>{i != null && page(i)}</div>
@@ -186,6 +211,11 @@ export default function Viewer({
           <span>{book.title} · {book.kind === "group" ? "GROUP" : "INDIVIDUAL"} PHOTOBOOK</span>
         </div>
         <div className="vbtns">
+          {saveTarget && (
+            <a className="ib" href={saveTarget} download aria-label="사진 저장" title="사진 저장" onClick={() => toast("사진 저장 중…")}>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 4v11M7 10l5 5 5-5M5 20h14" /></svg>
+            </a>
+          )}
           <button className="ib" onClick={openZoom} aria-label="확대">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="11" cy="11" r="6.5" /><path d="M16 16l4.5 4.5M11 8v6M8 11h6" /></svg>
           </button>

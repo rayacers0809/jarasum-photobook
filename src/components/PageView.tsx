@@ -5,11 +5,13 @@ import { Barcode, CoverInner } from "./Cover";
 
 const BLEED = new Set(["MAIN CONCEPT", "ALL TOGETHER"]);
 
+export type LockInfo = { loggedIn: boolean; tickets: number; busy: boolean; onUnlock: () => void };
+
 export default function PageView({
-  b, P, i, members, nextBook, onClose, onNext,
+  b, P, i, members, nextBook, onClose, onNext, lock,
 }: {
   b: Book; P: PageDesc[]; i: number; members: Book[]; nextBook: Book | null;
-  onClose: () => void; onNext: (id: string) => void;
+  onClose: () => void; onNext: (id: string) => void; lock?: LockInfo;
 }) {
   const pg = P[i];
   const G = b.kind === "group";
@@ -178,6 +180,28 @@ export default function PageView({
         </>,
       );
     }
+    case "lock":
+      return paper(
+        <div className="lockp">
+          <div className="lk">🔒</div>
+          <div className="tk">MEMBERS ONLY · {pg.remaining} MORE PAGES</div>
+          <h4>The rest is<br />waiting for you.</h4>
+          <p>여기서부터는 앨범을 열어야 볼 수 있어.<br />티켓 {b.ticket_cost}장으로 열면 영구 소장 + 사진 저장 가능!</p>
+          {lock?.loggedIn ? (
+            <>
+              <button disabled={lock.busy} onClick={(e) => { e.stopPropagation(); lock.onUnlock(); }}>
+                {lock.busy ? "여는 중…" : `🎟 티켓 ${b.ticket_cost}장으로 열기`}
+              </button>
+              <small>보유 티켓 {lock.tickets}장 · 매일 출석하면 1장씩</small>
+            </>
+          ) : (
+            <>
+              <button onClick={(e) => { e.stopPropagation(); lock?.onUnlock(); }}>로그인하고 열기</button>
+              <small>가입하면 티켓 3장 선물</small>
+            </>
+          )}
+        </div>,
+      );
     case "credits":
       return paper(
         <>

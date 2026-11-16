@@ -1,6 +1,8 @@
 "use client";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Book, fetchBooks, imgUrl, pad } from "@/lib/data";
+import { Book, fetchBooks, imgUrl, isLocked, pad } from "@/lib/data";
+import { useAuth } from "@/lib/auth";
+import AccountBar from "./AccountBar";
 import { BookObject } from "./Cover";
 import Viewer from "./Viewer";
 import { useToast } from "./Toast";
@@ -12,6 +14,11 @@ export default function Home() {
   const [err, setErr] = useState("");
   const [open, setOpen] = useState<{ id: string; page: number } | null>(null);
   const { toast, node } = useToast();
+  const { me, session } = useAuth();
+
+  const load = useCallback(() => fetchBooks().then(setBooks), []);
+  // re-fetch when login state changes (unlocked pages become visible)
+  useEffect(() => { if (books) load().catch(() => {}); }, [session?.user.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     fetchBooks()
@@ -24,7 +31,14 @@ export default function Home() {
       .catch((e) => setErr(String(e?.message || e)));
   }, []);
 
-  const members = useMemo(() => (books || []).filter((b) => b.kind === "member"), [books]);
+  const members = useMemo(() => (books || []).filter((b) => b.kind === "member" && b.is_official), [books]);
+  const extras = useMemo(() => (books || []).filter((b) => !b.is_official && b.is_public)
+    .sort((a, b) => +new Date(b.updated_at) - +new Date(a.updated_at)), [books]);
+  const label = useCallback((b: Book, base = "SPECIAL") => {
+    if (me?.album_unlocks.includes(b.id)) return "✓ OWNED";
+    if (b.ticket_cost === 0) return base;
+    return isLocked(b) ? `🎟 ${b.ticket_cost}` : base;
+  }, [me]);
   const group = useMemo(() => (books || []).find((b) => b.kind === "group"), [books]);
 
   const openBook = useCallback((id: string, page = 0) => {
@@ -54,9 +68,12 @@ export default function Home() {
       <div className="ribbon">JARASUM OFFICIAL DIGITAL PHOTOBOOK · SPECIAL EDITION · VOL.01</div>
       <header className="site wrap">
         <a className="logo" href="#top" id="top">JARASUM<small>THE OFFICIAL PHOTOBOOK</small></a>
-        <nav className="main">
-          <a href="#individual">INDIVIDUAL</a><a href="#group">GROUP</a><a href="#updates" className="hide-m">UPDATES</a><a href="#about">ABOUT</a>
-        </nav>
+        <div className="navwrap">
+          <nav className="main">
+            <a href="#individual">INDIVIDUAL</a><a href="#group">GROUP</a>{extras.length > 0 && <a href="#albums">ALBUMS</a>}<a href="#updates" className="hide-m">UPDATES</a>
+          </nav>
+          <AccountBar toast={toast} />
+        </div>
       </header>
 
       <section className="hero wrap">
@@ -81,9 +98,9 @@ export default function Home() {
           </div>
           {err && <p style={{ color: "#ff9a9a", fontSize: 13 }}>불러오기 실패: {err}</p>}
           {!books && !err && <p style={{ color: "#9b928a", fontSize: 12, letterSpacing: ".2em" }}>LOADING…</p>}
-          <div className="grid">{members.map((b) => <BookObject key={b.id} b={b} members={members} onOpen={openBook} />)}</div>
+          <div className="grid">{members.map((b) => <BookObject key={b.id} b={b} members={members} label={label(b)} onOpen={openBook} />)}</div>
           <div className="sep">THE GROUP ISSUE</div>
-          {group && <BookObject b={group} members={members} wide label="JARASUM GROUP PHOTOBOOK" onOpen={openBook} />}
+          {group && <BookObject b={group} members={members} wide label={label(group, "JARASUM GROUP PHOTOBOOK")} onOpen={openBook} />}
           <button className="down" aria-label="아래로" onClick={() => document.getElementById("group")?.scrollIntoView()}>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 4v15M5 12l7 7 7-7" /></svg>
           </button>
@@ -97,7 +114,7 @@ export default function Home() {
             <div className="note">9 MEMBERS<br />1 OFFICIAL GROUP ISSUE</div>
           </div>
           <div className="group-wrap">
-            <BookObject b={group} members={members} label="GROUP ISSUE" onOpen={openBook} />
+            <BookObject b={group} members={members} label={label(group, "GROUP ISSUE")} onOpen={openBook} />
             <div className="gcopy">
               <div className="kicker">{group.en} · {group.title}</div>
               <p>{group.description}</p>
@@ -114,8 +131,18 @@ export default function Home() {
         </section>
       )}
 
+      {extras.length > 0 && (
+        <section className="sec wrap" id="albums">
+          <div className="sec-head">
+            <div><div className="kicker">03 / NEW RELEASES</div><h3 className="big">Fresh <i>albums.</i></h3></div>
+            <div className="note">MADE BY<br />THE MEMBERS</div>
+          </div>
+          <div className="grid">{extras.map((b) => <BookObject key={b.id} b={b} members={members} label={label(b, b.title)} onOpen={openBook} />)}</div>
+        </section>
+      )}
+
       <section className="sec wrap" id="updates">
-        <div className="sec-head"><div><div className="kicker">03 / LATEST</div><h3 className="big"><i>Updates.</i></h3></div></div>
+        <div className="sec-head"><div><div className="kicker">{extras.length ? "04" : "03"} / LATEST</div><h3 className="big"><i>Updates.</i></h3></div></div>
         <div className="updates">
           {updates.map((b) => (
             <div key={b.id} className="upd" onClick={() => openBook(b.id)}>
@@ -139,7 +166,7 @@ export default function Home() {
       </footer>
 
       {openBookData && books && (
-        <Viewer key={openBookData.id} book={openBookData} books={books} startPage={open!.page} onClose={closeBook} onOpenBook={(id) => openBook(id)} toast={toast} />
+        <Viewer key={openBookData.id} book={openBookData} books={books} startPage={open!.page} onClose={closeBook} onOpenBook={(id) => openBook(id)} toast={toast} onUnlocked={load} />
       )}
       {node}
     </>
