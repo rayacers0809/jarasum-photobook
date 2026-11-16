@@ -1,11 +1,17 @@
 import { sb, SUPABASE_URL, BUCKET } from "./supabase";
 
+export type CaptionSize = "S" | "M" | "L" | "XL";
+export const CAPTION_SIZES: { v: CaptionSize; label: string }[] = [
+  { v: "S", label: "작게" }, { v: "M", label: "보통" }, { v: "L", label: "크게" }, { v: "XL", label: "아주 크게" },
+];
+
 export type Page = {
   id: string;
   book_id: string;
   position: number;
   section: string;
   caption: string;
+  caption_size: CaptionSize;
   image_path: string | null;
   /** locked for this viewer: metadata only, no image */
   locked?: boolean;
@@ -146,7 +152,7 @@ export async function touchBook(id: string) {
   await sb.from("photobook_books").update({ updated_at: now() }).eq("id", id);
 }
 
-export async function updatePage(id: string, patch: Partial<Pick<Page, "section" | "caption" | "image_path" | "position">>) {
+export async function updatePage(id: string, patch: Partial<Pick<Page, "section" | "caption" | "caption_size" | "image_path" | "position">>) {
   const { error } = await sb.from("photobook_pages").update({ ...patch, updated_at: now() }).eq("id", id);
   if (error) throw error;
 }

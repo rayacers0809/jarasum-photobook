@@ -378,3 +378,11 @@ header.site .navwrap{display:flex;align-items:center;gap:26px}
 .bleed img{object-fit:cover;object-position:center 22%}
 .bleed .fcap{bottom:5cqw;z-index:3}
 .bleed .fcap span{color:#fff;text-shadow:0 1px 6px #0008}
+/* caption sizes (per photo, set in admin) */
+.fcap.cs-S span{font-size:2.7cqw;-webkit-line-clamp:2}
+.fcap.cs-M span{font-size:3.3cqw;-webkit-line-clamp:2}
+.fcap.cs-L span{font-size:4.2cqw;-webkit-line-clamp:3}
+.fcap.cs-XL span{font-size:5.4cqw;line-height:1.35;-webkit-line-clamp:3}
+.paper>.fr:has(+ .fcap.cs-L){bottom:29cqw}
+.paper>.fr:has(+ .fcap.cs-XL){bottom:33cqw}
+select.capsz{background:#17130f;border:1px solid #2f2824;border-radius:8px;color:#fff;padding:8px 6px;font:13px var(--sans);flex:none}

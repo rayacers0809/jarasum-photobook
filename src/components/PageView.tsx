@@ -167,7 +167,7 @@ export default function PageView({
                 )}
               </div>
             </div>
-            <div className="fcap"><b>{p.section}</b>{p.caption && <span>{p.caption}</span>}</div>
+            <div className={`fcap cs-${p.caption_size || "M"}`}><b>{p.section}</b>{p.caption && <span>{p.caption}</span>}</div>
             {fol}
           </>,
         );
@@ -182,7 +182,7 @@ export default function PageView({
         </div>
       );
       const cap = (
-        <div className="fcap">
+        <div className={`fcap cs-${p.caption_size || "M"}`}>
           <b>{p.section}</b>
           {p.caption && <span>{p.caption}</span>}
         </div>

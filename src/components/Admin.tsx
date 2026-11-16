@@ -3,7 +3,7 @@ import { CSSProperties, useCallback, useEffect, useRef, useState } from "react";
 import { sb } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
 import {
-  Book, BookField, Member, Page, SECTION_PRESETS, createAlbum, deleteBook, deletePage, fetchBooks, fetchMembers, imgUrl, insertPage, pad,
+  Book, BookField, CAPTION_SIZES, CaptionSize, Member, Page, SECTION_PRESETS, createAlbum, deleteBook, deletePage, fetchBooks, fetchMembers, imgUrl, insertPage, pad,
   removeImage, rpcError, safeColor, touchBook, updateBook, updatePage, uploadImage,
 } from "@/lib/data";
 import Viewer from "./Viewer";
@@ -77,13 +77,13 @@ export default function Admin() {
       updateBook(b.id, { [f]: v }).catch((e) => toast("저장 실패: " + e.message));
     }, f === "is_public" || f === "color" ? 0 : 600);
   };
-  const editPage = (p: Page, f: "section" | "caption", v: string) => {
+  const editPage = (p: Page, f: "section" | "caption" | "caption_size", v: string) => {
     setBooks((bs) => bs.map((x) => (x.id === p.book_id ? { ...x, pages: x.pages.map((y) => (y.id === p.id ? { ...y, [f]: v } : y)) } : x)));
     const key = `p:${p.id}:${f}`;
     clearTimeout(timers.current[key]);
     timers.current[key] = setTimeout(() => {
       updatePage(p.id, { [f]: v }).then(() => touchBook(p.book_id)).catch((e) => toast("저장 실패: " + e.message));
-    }, 600);
+    }, f === "caption_size" ? 0 : 600);
   };
 
   if (!ready || !me) return <div className="wrap admin"><p>LOADING…</p></div>;
@@ -240,7 +240,12 @@ export default function Admin() {
                   <div className="pt">{p.image_path ? <img src={imgUrl(p.image_path)} alt="" /> : "EMPTY"}</div>
                   <div className="pf">
                     <div className="top"><span className="pn">{pad(i + 1)}</span><input value={p.section} placeholder="섹션 (예: CLOSE-UP)" list="secList" onChange={(e) => editPage(p, "section", e.target.value)} /></div>
-                    <input value={p.caption} placeholder="캡션 (선택)" onChange={(e) => editPage(p, "caption", e.target.value)} />
+                    <div className="top">
+                      <input value={p.caption} placeholder="캡션 (선택)" onChange={(e) => editPage(p, "caption", e.target.value)} />
+                      <select className="capsz" value={p.caption_size || "M"} onChange={(e) => editPage(p, "caption_size", e.target.value as CaptionSize)} aria-label="캡션 글자 크기">
+                        {CAPTION_SIZES.map((c) => <option key={c.v} value={c.v}>{c.label}</option>)}
+                      </select>
+                    </div>
                     <div className="row">
                       <button className="abtn sm" disabled={!i || !!busy} onClick={() => run("순서 변경", async () => { const q = b.pages[i - 1]; await updatePage(p.id, { position: q.position }); await updatePage(q.id, { position: p.position }); await touchBook(b.id); })}>↑</button>
                       <button className="abtn sm" disabled={i >= b.pages.length - 1 || !!busy} onClick={() => run("순서 변경", async () => { const q = b.pages[i + 1]; await updatePage(p.id, { position: q.position }); await updatePage(q.id, { position: p.position }); await touchBook(b.id); })}>↓</button>
