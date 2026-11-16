@@ -5,7 +5,7 @@ import { Barcode, CoverInner } from "./Cover";
 
 const BLEED = new Set(["MAIN CONCEPT", "ALL TOGETHER"]);
 
-export type LockInfo = { loggedIn: boolean; tickets: number; busy: boolean; onUnlock: () => void };
+export type LockInfo = { loggedIn: boolean; tickets: number; busy: string | null; onUnlock: (pageId: string) => void };
 
 export default function PageView({
   b, P, i, members, nextBook, onClose, onNext, lock,
@@ -141,6 +141,37 @@ export default function PageView({
       );
     case "photo": {
       const p = pg.p!;
+      if (p.locked) {
+        const busy = lock?.busy === p.id;
+        return paper(
+          <>
+            {run}
+            <div className="fr">
+              <div className="lockp">
+                <div className="lk">🔒</div>
+                <div className="tk">{p.section} · PHOTO {pad(pg.n || 0)}</div>
+                <h4>Members only.</h4>
+                <p>티켓 {b.ticket_cost}장으로 이 사진을 열면<br />영구 소장 + 저장 가능!</p>
+                {lock?.loggedIn ? (
+                  <>
+                    <button disabled={busy} onClick={(e) => { e.stopPropagation(); lock.onUnlock(p.id); }}>
+                      {busy ? "여는 중…" : `🎟 ${b.ticket_cost}장으로 보기`}
+                    </button>
+                    <small>보유 티켓 {lock.tickets}장</small>
+                  </>
+                ) : (
+                  <>
+                    <button onClick={(e) => { e.stopPropagation(); lock?.onUnlock(p.id); }}>로그인하고 보기</button>
+                    <small>가입하면 티켓 3장 선물</small>
+                  </>
+                )}
+              </div>
+            </div>
+            <div className="fcap"><b>{p.section}</b>{p.caption && <span>{p.caption}</span>}</div>
+            {fol}
+          </>,
+        );
+      }
       const u = imgUrl(p.image_path);
       const full = BLEED.has(String(p.section).toUpperCase());
       const ph = (
@@ -180,28 +211,6 @@ export default function PageView({
         </>,
       );
     }
-    case "lock":
-      return paper(
-        <div className="lockp">
-          <div className="lk">🔒</div>
-          <div className="tk">MEMBERS ONLY · {pg.remaining} MORE PAGES</div>
-          <h4>The rest is<br />waiting for you.</h4>
-          <p>여기서부터는 앨범을 열어야 볼 수 있어.<br />티켓 {b.ticket_cost}장으로 열면 영구 소장 + 사진 저장 가능!</p>
-          {lock?.loggedIn ? (
-            <>
-              <button disabled={lock.busy} onClick={(e) => { e.stopPropagation(); lock.onUnlock(); }}>
-                {lock.busy ? "여는 중…" : `🎟 티켓 ${b.ticket_cost}장으로 열기`}
-              </button>
-              <small>보유 티켓 {lock.tickets}장 · 매일 출석하면 1장씩</small>
-            </>
-          ) : (
-            <>
-              <button onClick={(e) => { e.stopPropagation(); lock?.onUnlock(); }}>로그인하고 열기</button>
-              <small>가입하면 티켓 3장 선물</small>
-            </>
-          )}
-        </div>,
-      );
     case "credits":
       return paper(
         <>

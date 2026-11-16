@@ -1,6 +1,6 @@
 "use client";
 import { CSSProperties, ReactNode, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { Book, bookPages, downloadUrl, imgUrl, isLocked, pad, safeColor, spreads, unlockAlbum } from "@/lib/data";
+import { Book, bookPages, downloadUrl, imgUrl, pad, safeColor, spreads, unlockPhoto } from "@/lib/data";
 import { useAuth } from "@/lib/auth";
 import PageView from "./PageView";
 
@@ -13,18 +13,18 @@ export default function Viewer({
   onOpenBook: (id: string) => void; toast: (t: string) => void; onUnlocked?: () => Promise<unknown> | void;
 }) {
   const { me, refresh } = useAuth();
-  const [unlocking, setUnlocking] = useState(false);
+  const [unlocking, setUnlocking] = useState<string | null>(null);
   const BASE = process.env.NEXT_PUBLIC_BASE_PATH || "";
-  const doUnlock = async () => {
+  const doUnlock = async (pageId: string) => {
     if (!me) { location.href = `${BASE}/login/?next=${encodeURIComponent(`/?book=${book.id}`)}`; return; }
-    setUnlocking(true);
+    setUnlocking(pageId);
     try {
-      await unlockAlbum(book.id);
+      await unlockPhoto(pageId);
       await refresh();
       await onUnlocked?.();
-      toast("앨범을 열었어! 영구 소장 완료 ✨");
+      toast("사진을 열었어! 영구 소장 ✨");
     } catch (e) { toast((e as Error).message); }
-    finally { setUnlocking(false); }
+    finally { setUnlocking(null); }
   };
   const P = useMemo(() => bookPages(book), [book]);
   const members = useMemo(() => books.filter((x) => x.kind === "member" && x.is_official), [books]);
@@ -153,9 +153,7 @@ export default function Viewer({
     }
     return "";
   };
-  const canSave = !isLocked(book);
   const saveTarget = (() => {
-    if (!canSave) return null;
     for (const i of [...view].reverse()) {
       if (i == null) continue;
       const pg = P[i];

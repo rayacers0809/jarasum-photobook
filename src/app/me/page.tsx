@@ -20,7 +20,7 @@ export default function MePage() {
   useEffect(() => { if (ready && !me) location.href = `${BASE}/login/?next=/me/`; }, [ready, me]);
   useEffect(() => { fetchBooks().then(setBooks).catch(() => {}); fetchMembers().then(setMembers).catch(() => {}); }, []);
 
-  const owned = useMemo(() => books.filter((b) => me?.album_unlocks.includes(b.id)), [books, me]);
+  const owned = useMemo(() => books.filter((b) => me?.album_unlocks.includes(b.id) || (me?.photo_books?.[b.id] ?? 0) > 0), [books, me]);
   const memberBooks = useMemo(() => books.filter((b) => b.kind === "member"), [books]);
   if (!me) return <div className="wrap" style={{ padding: 60 }}>LOADING…</div>;
 
@@ -66,15 +66,15 @@ export default function MePage() {
           <ul className="rules" style={{ marginTop: 14 }}>
             <li>매일 출석: 🎟 티켓 1장 + 🍪 쿠키 3개 (자정 기준, 한국 시간)</li>
             <li>7일 연속 출석: 🎟 2장 + 🍪 5개 추가 보너스</li>
-            <li>티켓으로 포토북 앨범을, 쿠키로 웹툰 잠금 회차를 열 수 있어. 한 번 열면 영구 소장!</li>
+            <li>티켓으로 포토북 사진을 한 장씩, 쿠키로 웹툰 잠금 회차를 열 수 있어. 한 번 열면 영구 소장!</li>
           </ul>
         </div>
 
         <div className="mecard">
           <h3>MY ALBUMS · {owned.length}</h3>
           {owned.length ? (
-            <div className="ownlist">{owned.map((b) => <BookObject key={b.id} b={b} members={memberBooks} label="OWNED" onOpen={(id) => (location.href = `${BASE}/?book=${id}`)} />)}</div>
-          ) : <p style={{ color: "#857a70", fontSize: 13, margin: 0 }}>아직 연 앨범이 없어. 티켓으로 첫 앨범을 열어봐!</p>}
+            <div className="ownlist">{owned.map((b) => <BookObject key={b.id} b={b} members={memberBooks} label={me.album_unlocks.includes(b.id) ? "ALL" : `${me.photo_books?.[b.id] ?? 0}장 소장`} onOpen={(id) => (location.href = `${BASE}/?book=${id}`)} />)}</div>
+          ) : <p style={{ color: "#857a70", fontSize: 13, margin: 0 }}>아직 연 사진이 없어. 티켓으로 첫 사진을 열어봐!</p>}
         </div>
 
         <div className="mecard">

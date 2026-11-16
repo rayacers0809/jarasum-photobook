@@ -7,6 +7,8 @@ export type Page = {
   section: string;
   caption: string;
   image_path: string | null;
+  /** locked for this viewer: metadata only, no image */
+  locked?: boolean;
 };
 
 export type Book = {
@@ -40,6 +42,8 @@ export type Me = {
   checked_today: boolean; is_staff: boolean; editor_members: string[];
   application: { status: "pending" | "approved" | "rejected"; member_id: string; created_at: string } | null;
   album_unlocks: string[]; episode_unlocks: string[];
+  /** book_id → number of photos this user unlocked */
+  photo_books: Record<string, number>;
 };
 
 export type BookField = "name" | "en" | "title" | "slogan" | "description" | "profile" | "credits" | "color" | "is_public" | "ticket_cost" | "free_photos";
@@ -53,16 +57,22 @@ export function imgUrl(path?: string | null): string {
 }
 
 export async function fetchBooks(): Promise<Book[]> {
-  const [{ data, error }, counts] = await Promise.all([
+  const [{ data, error }, lockedRes] = await Promise.all([
     sb.from("photobook_books").select("*, pages:photobook_pages(*)")
       .order("sort", { ascending: true }).order("created_at", { ascending: false }),
-    sb.rpc("photobook_page_counts"),
+    sb.rpc("photobook_locked_pages"),
   ]);
   if (error) throw error;
-  const total = new Map<string, number>(((counts.data || []) as { book_id: string; total: number }[]).map((r) => [r.book_id, r.total]));
+  const locked = new Map<string, Page[]>();
+  for (const r of (lockedRes.data || []) as Omit<Page, "image_path" | "locked">[]) {
+    const arr = locked.get(r.book_id) || [];
+    arr.push({ ...r, image_path: null, locked: true });
+    locked.set(r.book_id, arr);
+  }
   return (data as Book[]).map((b) => {
-    const pages = [...(b.pages || [])].sort((a, c) => a.position - c.position || a.id.localeCompare(c.id));
-    return { ...b, pages, total_pages: Math.max(total.get(b.id) ?? pages.length, pages.length) };
+    const pages = [...(b.pages || []), ...(locked.get(b.id) || [])]
+      .sort((a, c) => a.position - c.position || a.id.localeCompare(c.id));
+    return { ...b, pages, total_pages: pages.length };
   });
 }
 
@@ -72,7 +82,8 @@ export async function fetchMembers(): Promise<Member[]> {
   return data as Member[];
 }
 
-export const isLocked = (b: Book) => b.pages.length < b.total_pages;
+export const lockedCount = (b: Book) => b.pages.filter((p) => p.locked).length;
+export const isLocked = (b: Book) => lockedCount(b) > 0;
 
 /** Map RPC error codes to friendly Korean messages. */
 export function rpcError(e: unknown): string {
@@ -86,8 +97,8 @@ export function rpcError(e: unknown): string {
   return m;
 }
 
-export async function unlockAlbum(bookId: string) {
-  const { data, error } = await sb.rpc("jr_unlock_album", { p_book: bookId });
+export async function unlockPhoto(pageId: string) {
+  const { data, error } = await sb.rpc("jr_unlock_photo", { p_page: pageId });
   if (error) throw new Error(rpcError(error));
   return data as { ok: boolean; tickets?: number };
 }
@@ -170,13 +181,12 @@ export async function deletePage(id: string) {
 }
 
 /* ---------- photobook page model ---------- */
-export type PageKind = "cover" | "title" | "profile" | "roster" | "photo" | "lock" | "credits" | "end";
-export type PageDesc = { k: PageKind; p?: Page; n?: number; remaining?: number };
+export type PageKind = "cover" | "title" | "profile" | "roster" | "photo" | "credits" | "end";
+export type PageDesc = { k: PageKind; p?: Page; n?: number };
 
 export function bookPages(b: Book): PageDesc[] {
   const P: PageDesc[] = [{ k: "cover" }, { k: "title" }, { k: b.kind === "group" ? "roster" : "profile" }];
   b.pages.forEach((p, i) => P.push({ k: "photo", p, n: i + 1 }));
-  if (isLocked(b)) P.push({ k: "lock", remaining: b.total_pages - b.pages.length });
   P.push({ k: "credits" }, { k: "end" });
   return P;
 }

@@ -1,6 +1,6 @@
 "use client";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Book, fetchBooks, imgUrl, isLocked, pad } from "@/lib/data";
+import { Book, fetchBooks, imgUrl, lockedCount, pad } from "@/lib/data";
 import { useAuth } from "@/lib/auth";
 import AccountBar from "./AccountBar";
 import { BookObject } from "./Cover";
@@ -36,9 +36,8 @@ export default function Home() {
   const extras = useMemo(() => (books || []).filter((b) => !b.is_official && b.is_public)
     .sort((a, b) => +new Date(b.updated_at) - +new Date(a.updated_at)), [books]);
   const label = useCallback((b: Book, base = "SPECIAL") => {
-    if (me?.album_unlocks.includes(b.id)) return "✓ OWNED";
-    if (b.ticket_cost === 0) return base;
-    return isLocked(b) ? `🎟 ${b.ticket_cost}` : base;
+    if (b.ticket_cost === 0 || lockedCount(b) === 0) return me?.photo_books?.[b.id] || me?.album_unlocks.includes(b.id) ? "✓ OWNED" : base;
+    return `🎟 ${b.ticket_cost}/장`;
   }, [me]);
   const group = useMemo(() => (books || []).find((b) => b.kind === "group"), [books]);
 

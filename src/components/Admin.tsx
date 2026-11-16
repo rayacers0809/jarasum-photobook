@@ -186,7 +186,7 @@ export default function Admin() {
           <div className="acard">
             <h3>잠금 · 티켓</h3>
             <div className="fgrid">
-              <label className="f">열람 티켓 (0 = 무료)<input type="number" min={0} max={20} value={b.ticket_cost} onChange={(e) => editBook("ticket_cost", Math.max(0, Math.min(20, +e.target.value || 0)))} /></label>
+              <label className="f">사진 1장당 티켓 (0 = 전부 무료)<input type="number" min={0} max={20} value={b.ticket_cost} onChange={(e) => editBook("ticket_cost", Math.max(0, Math.min(20, +e.target.value || 0)))} /></label>
               <label className="f">무료 미리보기 사진 수<input type="number" min={0} max={20} value={b.free_photos} onChange={(e) => editBook("free_photos", Math.max(0, Math.min(20, +e.target.value || 0)))} /></label>
             </div>
           </div>
