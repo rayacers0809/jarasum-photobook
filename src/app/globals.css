@@ -386,3 +386,8 @@ header.site .navwrap{display:flex;align-items:center;gap:26px}
 .paper>.fr:has(+ .fcap.cs-L){bottom:29cqw}
 .paper>.fr:has(+ .fcap.cs-XL){bottom:33cqw}
 select.capsz{background:#17130f;border:1px solid #2f2824;border-radius:8px;color:#fff;padding:8px 6px;font:13px var(--sans);flex:none}
+/* intro page (replaces the contents list) */
+.pp.intro{justify-content:center}
+.pp.intro .rule{width:14cqw;height:1.5px;background:var(--print);margin:8cqw 0 0}
+.pp.intro .slg{margin-top:6cqw}
+.pp.intro .meta{position:absolute;left:8cqw;right:8cqw;bottom:12cqw;display:flex;justify-content:space-between;font:600 2.1cqw var(--sans);letter-spacing:.28em;color:#00000080;border-top:1px solid #00000022;padding-top:3cqw}

@@ -39,14 +39,11 @@ export default function PageView({
         </div>
       );
     case "title": {
-      const seen: [string, number][] = [];
-      P.forEach((x, j) => {
-        if (x.k === "photo" && x.p && !seen.find((s) => s[0] === x.p!.section)) seen.push([x.p.section, j]);
-      });
+      const photos = P.filter((x) => x.k === "photo").length;
       return paper(
         <>
           {run}
-          <div className="pp">
+          <div className="pp intro">
             <small className="k">{G ? "THE GROUP PHOTOBOOK" : "THE INDIVIDUAL PHOTOBOOK"}</small>
             {G ? (
               <>
@@ -59,18 +56,12 @@ export default function PageView({
                 <em>{b.en}</em>
               </>
             )}
+            <div className="rule" />
             <div className="slg">“{b.slogan}”</div>
-            <ol className="toc">
-              {seen.map((s) => (
-                <li key={s[0]}>
-                  {s[0]}
-                  <span>{pad(s[1] + 1)}</span>
-                </li>
-              ))}
-              <li>
-                CREDITS<span>{pad(P.length - 1)}</span>
-              </li>
-            </ol>
+            <div className="meta">
+              <span>{b.title}</span>
+              <span>{photos} PHOTOGRAPHS</span>
+            </div>
           </div>
           {fol}
         </>,
