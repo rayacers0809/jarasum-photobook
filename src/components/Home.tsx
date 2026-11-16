@@ -8,6 +8,7 @@ import Viewer from "./Viewer";
 import { useToast } from "./Toast";
 
 const BASE = process.env.NEXT_PUBLIC_BASE_PATH || "";
+const WEBTOON_URL = process.env.NEXT_PUBLIC_WEBTOON_URL || "https://jaraseom.webtoon.workers.dev";
 
 export default function Home() {
   const [books, setBooks] = useState<Book[] | null>(null);
@@ -70,7 +71,7 @@ export default function Home() {
         <a className="logo" href="#top" id="top">JARASUM<small>THE OFFICIAL PHOTOBOOK</small></a>
         <div className="navwrap">
           <nav className="main">
-            <a href="#individual">INDIVIDUAL</a><a href="#group">GROUP</a>{extras.length > 0 && <a href="#albums">ALBUMS</a>}<a href="#updates" className="hide-m">UPDATES</a>
+            <a href="#individual">INDIVIDUAL</a><a href="#group">GROUP</a>{extras.length > 0 && <a href="#albums">ALBUMS</a>}<a href="#updates" className="hide-m">UPDATES</a><a href={WEBTOON_URL}>WEBTOON ↗</a>
           </nav>
           <AccountBar toast={toast} />
         </div>
@@ -162,7 +163,7 @@ export default function Home() {
 
       <footer className="site wrap">
         <div><b>JARASUM</b><br />THE OFFICIAL DIGITAL PHOTOBOOK<br />SPECIAL EDITION · VOL.01</div>
-        <div style={{ textAlign: "right" }}>© 2026 JARASUM<br /><a href={`${BASE}/admin/`}>ADMIN STUDIO</a></div>
+        <div style={{ textAlign: "right" }}>© 2026 JARASUM<br /><a href={WEBTOON_URL}>자라섬 WEBTOON</a> · <a href={`${BASE}/admin/`}>ADMIN STUDIO</a></div>
       </footer>
 
       {openBookData && books && (
